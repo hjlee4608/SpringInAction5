@@ -174,4 +174,36 @@ public class User implements UserDetails {
 public interface IngredientRepository extends ReactiveCrudRepository<Ingredient, String> {
 }
 ~~~
-- Taco 객체를
+- Taco 객체의 경우 생성하는 경우가 많으므로 ReactiveMongoRepository의 최적화된 insert() 메소드가 유용할 수 있으므로 ReactiveMongoRepository를 사용해본다.
+- 그러나 ReactiveMongoRepository의 단점은 몽고DB에 매우 특화되어 있으므로 다른 데이터베이스에는 사용이 불가하다는 점이다. 만약 중간에 다른 데이터베이스로 전환할 경우에는 곤란할 수 있으므로 신중하게 결정할 필요가 있다.
+~~~
+public interface TacoRepository extends ReactiveMongoRepository<Taco, String> {
+  Flux<Taco> findByOrderByCreatedAcDesc();
+}
+~~~
+- 위 코드에서 findByOrderByCreatedAcDesc()는 Flux를 반환하므로 결과의 페이징을 신경쓰지 않아도 된다. 대신에 take() 오퍼레이션을 적용하여 Flux에서 발행되는 처음 12개의 Taco 객체만 반환할 수 있다. 예를 들어, 최근 생성된 타코들을 보여주는 컨트롤러에서는 다음과 같이 호출할 수 있다.
+~~~
+Flux<Taco> recents = repo.findByOrderCreatedAtDesc().take(12);
+~~~
+
+- 아래는 OrderRepository 인터페이스이다. Order의 경우도 잦은 생성메소드가 호출되므로 ReactiveMongoRepository를 사용해본다.
+~~~
+public interface OrderRepository extends ReactiveMongoRepository<Order, String> {
+
+}
+~~~
+
+- 마지막으로 User 객체를 문서로 저장하는 리퍼지터리 인터페이스이다.
+~~~
+public interface UserRepository extends ReactvieMongoRepository<User, String> {
+  Mono<User> findByUsername(String username);
+}
+~~~
+
+요약
+=============
+1. 스프링 데이터는 카산드라, 몽고DB, 카우치베이스, 레디스 데이터베이스의 리액티브 리퍼지터리를 지원한다.
+2. 스프링 데이터의 리액티브 리퍼지터리는 리액티브가 아닌 리퍼지터리와 동일한 프로그래밍 모델을 따른다. 단, Flux나 Mono와 같은 리액티브 타입을 사용한다.
+3. JPA 리퍼지터리와 같은 리액티브가 아닌 리퍼지터리는 Mono나 Flux를 사용하도록 조정할 수 있다. 그러나 데이터를 가져오거나 저장할 때 여전히 블로킹이 발생한다.
+4. 관계형이 아닌 데이터베이스를 사용하려면 해당 데이터베이스에서 데이터를 저장하는 방법에 맞게 데이터를 모델링하는 방법을 알아야 한다.
+5. 
