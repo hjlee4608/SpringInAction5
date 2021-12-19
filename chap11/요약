@@ -1,1 +1,11 @@
-11.4.1 리소스 얻기(Get)ㅇ
+11.4.1 리소스 얻기(Get)
+
+
+  Mono<Ingredient> ingredients = Webclient.create()
+      .get()
+      .uri("http://localhost:8080/ingredients/{id}", ingredientId)
+      .retrieve()
+      .bodyToMono(Ingredient.class);
+      
+  ingredient.subscribe(i -> {...})
+
