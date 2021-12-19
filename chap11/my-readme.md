@@ -115,7 +115,7 @@ Mono<Void> result = webClient
   .subscribe();
 ~~~
 
-11.4.4 에처 처리하기
+11.4.4 에러 처리하기
 
 ~~~
 Mono<Ingredient> ingredientMono = webClient
@@ -137,5 +137,99 @@ ingredientMono.subscribe(
 )
 ~~~
 
+11.4.5 요청 교환하기
+retrieve 메소드는 ResponseSpec 타입의 객체를 반환하였다. 허나 ResponseSpec은 간단한 상황에서는 쓰기 좋으나 몇가지 경우에서는 제한이 된다. 예를 들어, 응답의 헤더나 쿠키 값을
+사용할 필요가 있을 때는 사용할 수가 없다.
+ResponseSpec이 기대에 미치지 못할때는 retrieve 메소드 대신 exchange를 호출할 수 있다. exchange 메소드는 ClientResponse 타입의 Mono를 반환한다. ClientResponse 타입은 리액티브
+오퍼레이션을 적용할 수 있고 응답의 모든 부분(페이롣, 헤더, 쿠키 등)에서 데이터를 사용할 수 있다.
 
-  
+아래는 exchange와 retrieve 비교 코드이다.
+
+~~~
+Mono<Ingredient> ingredientMono = webClient
+        .get()
+        .uri("http://localhost:8080/ingredients/{id}", ingredientId)
+        .exchange()
+        .flatMap(cr -> cr.bodyToMono(Ingredient.class));
+~~~
+
+~~~
+Mono<Ingredient> ingredientMono = webClient
+        .get()
+        .uri("http://localhost:8080/ingredients/{id}", ingredientId)
+        .retrieve()
+        .bodyToMono(Ingredient.class);
+~~~
+
+exchange에 대해 더 알아볼 수 있는 예제이다. 요청의 응답에 X_UNAVAILABLE의 헤더가 포함될 수 있으며 헤더가 존재한다면 Mono는 빈것이어 한다고 가정을 해보고 코드를 구현한다면 아래와 같다.
+~~~
+Mono<Ingredient> ingredientMono = webClient
+        .get()
+        .uri("http://localhost:8080/ingredients/{id}", ingredientId)
+        .exchange()
+        .flatMap(cr -> {
+                if(cr.headers().header("X_UNAVAILABLE").contains("true") {
+                    return Mono.empty();
+                }
+                return Mono.just(cr);
+            })
+        .flatMap(cr -> cr.bodyToMono(Ingredient.class));
+~~~
+
+11.5 리액티브 웹 API 보안
+- 기존 spring security는 서블릿 필터를 중심으로 만들어졌다.
+- 그러나 WebFlux에서는 서블릿이 개입된다는 보장이 없다. 실제로 non-servilet 서버에 구축될 가능성이 많다.
+- 스프링 5.0 버전부터 스프링 시큐리티는 서블릿 기반의 스프링 MVC와 리액티브 스프링 WebFlux 애플리케이션 모두의 보안에 사용될 수 있다. 스프링의 WebFliter가 이 일을 해준다.
+
+11.5.1 리액티브 웹 보안 구성하기
+기존 스프링 MVC 어플리케이션 보안 구성과 WebFlux 어플리케이션 보안 구성을 비교해보자
+~~~
+@Configuration
+@EnableWebSecurity
+public class SecurityConfig extends WebSecurityConfigurerAdapter {
+
+    @Override
+    protected void configure(HttpSecurity http) throws Exception {
+        http
+            .authorizeRequests()
+                .antMatchers("/design", "/orders").hasAuthority("USER")
+                .antMatchers("/**").permitAll();
+    }
+
+}
+~~~
+~~~
+@Configuration
+@EnableWebFluxSecurity //@EnableWebSecurity가 아니다.
+public class SecurityConfig  //기존과 달리 상속을 받지 않는다. 
+{
+    
+    @Bean
+    public SecurityWebFilterChain securityWebFilterChain(ServerHttpSecurity http) { //HttpSecurity 대신 ServerHttpSecurity 사용한다.
+            return http
+                .authorizeExchange() //요청 수준의 보안을 선언하는 authorizeRequests와 동일한 역할을 한다.
+                .pathMatchers("/design", "/orders").hasAuthority("USER")
+                .anyExchange() // "/**" 와 동일한 역할한다.
+                .permitAll()
+                .and()
+                .build();
+    }
+}
+~~~
+
+11.5.2 리액티브 사용자 명세 서비스 구성하기
+~~~
+@Service
+public ReactvieUserDetailService userDetailService(UserRepository userRepo) {
+    return new ReactiveUserDetailService() {
+        @Override
+        public Mono<UserDetails> findByUsername(String username) {
+            return userRepo.findByUsername(username)
+                            .map(user -> {
+                                   return user.toUserDetail();
+                            });
+        }
+    }
+}
+~~~
+
