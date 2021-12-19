@@ -1,6 +1,7 @@
 11.4.1 리소스 얻기(Get)
 
-
+<pre>
+<code>
   Mono<Ingredient> ingredients = Webclient.create()
       .get()
       .uri("http://localhost:8080/ingredients/{id}", ingredientId)
@@ -8,4 +9,5 @@
       .bodyToMono(Ingredient.class);
       
   ingredient.subscribe(i -> {...})
-
+</code>
+</pre>
